@@ -1,0 +1,1779 @@
+######visualize PCoAs
+library(vegan)
+  library(ggplot2)
+  
+  # Load data
+  dist <- as.matrix(read.table("braycurtis_distance_matrix_before.tsv",
+                               header=TRUE, row.names=1, sep="\t"))
+  meta <- read.table("ciclistas_microbiota_all_metadata.tsv",
+                     header=TRUE, sep="\t")
+  
+  # Match metadata order to distance matrix
+  meta <- meta[match(rownames(dist), meta$sample_name), ]
+  
+  # PCoA
+  pcoa <- cmdscale(as.dist(dist), eig=TRUE, k=2)
+  
+  coords <- as.data.frame(pcoa$points)
+  colnames(coords) <- c("PC1", "PC2")
+  coords$cluster <- meta$cluster
+  
+  # Variance explained
+  var1 <- round(pcoa$eig[1] / sum(pcoa$eig) * 100, 2)
+  var2 <- round(pcoa$eig[2] / sum(pcoa$eig) * 100, 2)
+  
+  # Colors
+  cols <- c("A"="red", "B"="orange", "C"="blue")
+  
+  # Plot
+  ggplot(coords, aes(PC1, PC2, color=cluster)) +
+    geom_point(size=3, alpha=0.9) +
+    scale_color_manual(values=cols) +
+    xlab(paste0("PC1 (", var1, "%)")) +
+    ylab(paste0("PC2 (", var2, "%)")) +
+    theme_minimal() +
+    theme(
+      text = element_text(size=14),
+      legend.title = element_text(size=12),
+      legend.text = element_text(size=11)
+    )
+  
+  
+  library(vegan)
+  library(ggplot2)
+  library(dplyr)
+  library(grid)  # for arrow()
+  
+  # Load data
+  dist <- as.matrix(read.table("braycurtis_distance_matrix_all.tsv",
+                               header=TRUE, row.names=1, sep="\t"))
+  
+  meta <- read.table("ciclistas_microbiota_all_metadata.tsv",
+                     header=TRUE, sep="\t")
+  
+  # Match metadata order to distance matrix
+  meta <- meta[match(rownames(dist), meta$sample_name), ]
+  
+  # PCoA
+  pcoa <- cmdscale(as.dist(dist), eig=TRUE, k=2)
+  
+  coords <- as.data.frame(pcoa$points)
+  colnames(coords) <- c("PC1", "PC2")
+  
+  # Add metadata
+  coords$cluster <- meta$cluster
+  coords$time_point <- as.factor(meta$time_point)
+  coords$sample_id <- meta$host_subject_id
+  
+  # Ensure proper ordering (so arrows go from time 1 -> 2)
+  coords <- coords %>%
+    arrange(sample_id, time_point)
+  
+  # Variance explained
+  var1 <- round(pcoa$eig[1] / sum(pcoa$eig) * 100, 2)
+  var2 <- round(pcoa$eig[2] / sum(pcoa$eig) * 100, 2)
+  
+  # Colors and shapes
+  cols <- c("A"="red", "B"="orange", "C"="blue")
+  shapes <- c("1"=16, "2"=15)  # circle, square
+  
+  library(ggplot2)
+  library(dplyr)
+  library(grid)
+  
+  # Create start/end coordinates for each pair
+  segments <- coords %>%
+    arrange(sample_id, time_point) %>%
+    group_by(sample_id) %>%
+    summarise(
+      x_start = PC1[time_point == "1"],
+      y_start = PC2[time_point == "1"],
+      x_end   = PC1[time_point == "2"],
+      y_end   = PC2[time_point == "2"]
+    ) %>%
+    ungroup()
+  
+  # Function to shorten arrows
+  shrink_factor <- 0.05  # adjust this if needed
+  
+  segments <- segments %>%
+    mutate(
+      dx = x_end - x_start,
+      dy = y_end - y_start,
+      x_end2 = x_end - dx * shrink_factor,
+      y_end2 = y_end - dy * shrink_factor
+    )
+  
+  # Plot
+  ggplot(coords, aes(PC1, PC2)) +
+    
+    # Arrows (shortened so they don’t hit the point)
+    geom_segment(data=segments,
+                 aes(x=x_start, y=y_start, xend=x_end2, yend=y_end2),
+                 arrow=arrow(type="closed", length=unit(0.15, "cm")),
+                 color="gray50", alpha=0.7, linewidth=0.6) +
+    
+    # Points
+    geom_point(aes(color=cluster, shape=time_point), size=3) +
+    
+    scale_color_manual(values=cols) +
+    scale_shape_manual(values=shapes) +
+    
+    xlab(paste0("PC1 (", var1, "%)")) +
+    ylab(paste0("PC2 (", var2, "%)")) +
+    
+    theme_minimal()
+
+#### UPGMA dendrogram visualization
+# Load libraries
+library(vegan)    # if not already loaded
+library(ggplot2)
+library(ggdendro) # for ggplot dendrogram plotting
+
+# 1. Compute UPGMA tree (average linkage)
+hc <- hclust(dist_mat, method = "average")  # 'average' = UPGMA
+
+# 2. Convert to a dendrogram object
+dend <- as.dendrogram(hc)
+
+# 3. Assign colors by cluster
+cluster_colors <- setNames(
+  RColorBrewer::brewer.pal(length(unique(metadata$cluster)), "Set1"),
+  unique(metadata$cluster)
+)
+
+# 4. Color labels
+library(dendextend)
+dend <- dend %>%
+  set("labels_col", cluster_colors[metadata$cluster[order.dendrogram(dend)]]) %>%
+  set("labels_cex", 0.8)   # adjust label size
+
+# 5. Plot dendrogram
+plot(dend, main = "UPGMA Dendrogram of Bray Curtis Distances",
+     ylab = "Bray Curtis Distance")
+legend("topright", legend = names(cluster_colors), fill = cluster_colors, cex = 0.8)
+
+
+#### ANOSIM analysis
+# Load your count table
+counts <- read.table("genomes_srs_before.tsv", header = TRUE, row.names = 1)
+counts <- t(counts)
+metadata <- read.table("Ciclistas_microbiota_all_metadata.tsv",
+                       header = TRUE,
+                       sep = "\t",
+                       quote = "",
+                       check.names = FALSE,
+                       comment.char = "",
+                       fill = TRUE,
+                       row.names = "sample_name")
+rownames(metadata) <- paste0("X", rownames(metadata))
+# Keep only metadata rows whose rownames are also in the count table
+metadata <- metadata[rownames(metadata) %in% rownames(counts), ]
+
+# Make sure they are in the same order
+metadata <- metadata[match(rownames(counts), rownames(metadata)), ]
+
+# Check that they now align perfectly
+all(rownames(metadata) == rownames(counts))
+
+library(vegan)
+dist_mat <- vegdist(counts, method="bray")
+anosim(dist_mat, metadata$cluster, permutations=999)
+#repeat with aitchison distance
+library(compositions)  # for CLR transformation
+
+# Add a pseudocount if zeros exist
+counts_clr <- clr(counts + 1)
+# Euclidean distance on CLR-transformed data
+dist_aitch <- dist(counts_clr, method = "euclidean")
+anosim(dist_aitch, metadata$cluster, permutations = 999)
+
+###repeat anosim with weighted unifrac exported from qiime2
+# ----------------------------------------------------
+# Load libraries
+# ----------------------------------------------------
+library(vegan)
+
+# ----------------------------------------------------
+# Load distance matrix
+# ----------------------------------------------------
+dist_mat <- read.delim("weighted_unifrac_distance_matrix_before.tsv",
+                       row.names = 1,
+                       check.names = FALSE,
+                       stringsAsFactors = FALSE)
+
+# Convert to numeric matrix
+dist_mat <- as.matrix(dist_mat)
+
+# Ensure rows and columns match
+if(!all(rownames(dist_mat) == colnames(dist_mat))) {
+  stop("Error: Row and column names are not identical in the distance matrix.")
+}
+
+# Convert to dist object
+dist_obj <- as.dist(dist_mat)
+
+# ----------------------------------------------------
+# Load metadata
+# ----------------------------------------------------
+metadata <- read.delim("ciclistas_microbiota_all_metadata.tsv",
+                       stringsAsFactors = FALSE)
+
+# Match order of samples in metadata to distance matrix
+metadata <- metadata[match(labels(dist_obj), metadata$sample_name), ]
+
+# Check that all samples matched
+if(any(is.na(metadata$sample_name))) {
+  stop("Some samples in the distance matrix do not exist in metadata.")
+}
+
+# ----------------------------------------------------
+# Run ANOSIM
+# ----------------------------------------------------
+anosim_result <- anosim(dist_obj, metadata$cluster, permutations = 999)
+
+print(anosim_result)
+
+# Shannon diversity per group over time
+  # Load necessary libraries
+  library(tidyverse)
+  library(ggpubr)
+  library(rstatix)
+  
+  # Load the data
+  data <- read_tsv("shannon_change.tsv")
+  
+  #------------------------------------------
+  # 1. Normality and variance tests per Cluster
+  #------------------------------------------
+  normality_baseline <- data %>%
+    group_by(Cluster) %>%
+    shapiro_test(Shannon_Baseline)
+  
+  normality_end <- data %>%
+    group_by(Cluster) %>%
+    shapiro_test(Shannon_end)
+  
+  levene_baseline <- data %>% levene_test(Shannon_Baseline ~ Cluster)
+  levene_end <- data %>% levene_test(Shannon_end ~ Cluster)
+  
+  #------------------------------------------
+  # 2. Test differences between Clusters (with pairwise)
+  #------------------------------------------
+  # Decide parametric or non-parametric
+  if(all(normality_baseline$p > 0.05) & levene_baseline$p > 0.05){
+    baseline_test <- data %>% anova_test(Shannon_Baseline ~ Cluster)
+    baseline_pairwise <- data %>% pairwise_t_test(Shannon_Baseline ~ Cluster, p.adjust.method = "BH")
+  } else {
+    baseline_test <- data %>% kruskal_test(Shannon_Baseline ~ Cluster)
+    baseline_pairwise <- data %>% pairwise_wilcox_test(Shannon_Baseline ~ Cluster, p.adjust.method = "BH")
+  }
+  
+  if(all(normality_end$p > 0.05) & levene_end$p > 0.05){
+    end_test <- data %>% anova_test(Shannon_end ~ Cluster)
+    end_pairwise <- data %>% pairwise_t_test(Shannon_end ~ Cluster, p.adjust.method = "BH")
+  } else {
+    end_test <- data %>% kruskal_test(Shannon_end ~ Cluster)
+    end_pairwise <- data %>% pairwise_wilcox_test(Shannon_end ~ Cluster, p.adjust.method = "BH")
+  }
+  
+  #------------------------------------------
+  # 3. Paired test for Baseline vs End per Cluster
+  #------------------------------------------
+  paired_tests <- data %>%
+    group_by(Cluster) %>%
+    summarise(
+      test_result = list(
+        if(shapiro.test(Shannon_end - Shannon_Baseline)$p.value > 0.05){
+          t.test(Shannon_end, Shannon_Baseline, paired = TRUE)
+        } else {
+          wilcox.test(Shannon_end, Shannon_Baseline, paired = TRUE)
+        }
+      )
+    )
+  
+  #------------------------------------------
+  # 4. Mixed ANOVA for Cluster x Time interaction
+  #------------------------------------------
+  data_long <- data %>%
+    pivot_longer(cols = c(Shannon_Baseline, Shannon_end),
+                 names_to = "Time",
+                 values_to = "Shannon") %>%
+    mutate(Time = factor(Time, levels = c("Shannon_Baseline", "Shannon_end")))
+  
+  anova_mixed <- anova_test(
+    data = data_long,
+    dv = Shannon,
+    wid = Subject,
+    within = Time,
+    between = Cluster
+  )
+  
+  #------------------------------------------
+  # 5. Summary table of results
+  #------------------------------------------
+  summary_table <- list(
+    normality_baseline = normality_baseline,
+    normality_end = normality_end,
+    levene_baseline = levene_baseline,
+    levene_end = levene_end,
+    baseline_cluster_test = baseline_test,
+    baseline_pairwise = baseline_pairwise,
+    end_cluster_test = end_test,
+    end_pairwise = end_pairwise,
+    paired_tests = paired_tests,
+    cluster_time_interaction = anova_mixed
+  )
+  
+  print(summary_table)
+
+### General script for before after bar plots
+  #------------------------------------------
+  # 6. Visualization: bar plot with points and lines
+  #------------------------------------------
+  summary_stats <- data_long %>%
+    group_by(Cluster, Time) %>%
+    summarise(
+      mean_shannon = mean(Shannon),
+      se_shannon = sd(Shannon)/sqrt(n()),
+      .groups = "drop"
+    )
+# load data
+  df <- read_tsv("shannon_change.tsv")
+  
+  # reshape
+  df_long <- df_long %>%
+    mutate(
+      Cluster = factor(Cluster, levels = c("A", "B", "C")),
+      x_base = as.numeric(Cluster),
+      offset = ifelse(time_point == "Baseline", -0.2, 0.2),
+      x_plot = x_base + offset
+    )
+  
+  summary_df <- summary_df %>%
+    mutate(
+      Cluster = factor(Cluster, levels = c("A", "B", "C")),
+      x_base = as.numeric(Cluster),
+      offset = ifelse(time_point == "Baseline", -0.2, 0.2),
+      x_plot = x_base + offset
+    )
+  # plot
+  p <- ggplot() +
+    
+    # bars
+    geom_col(
+      data = summary_df,
+      aes(x = x_plot, y = mean_shannon, fill = time_point),
+      width = 0.35,
+      alpha = 0.9
+    ) +
+    
+    # error bars
+    geom_errorbar(
+      data = summary_df,
+      aes(
+        x = x_plot,
+        ymin = mean_shannon - se_shannon,
+        ymax = mean_shannon + se_shannon
+      ),
+      width = 0.1
+    ) +
+    
+    # 🔥 correct paired lines
+    geom_line(
+      data = df_long,
+      aes(
+        x = x_plot,
+        y = Shannon,
+        group = interaction(Subject, Cluster)  # CRITICAL FIX
+      ),
+      color = "gray40",
+      alpha = 0.6,
+      linewidth = 0.7
+    ) +
+    
+    # points
+    geom_point(
+      data = df_long,
+      aes(
+        x = x_plot,
+        y = Shannon,
+        color = Cluster
+      ),
+      size = 2
+    ) +
+    
+    # clean x-axis labels
+    scale_x_continuous(
+      breaks = c(1, 2, 3),
+      labels = c("A", "B", "C")
+    ) +
+    
+    scale_fill_manual(
+      values = c("Baseline" = "gray70", "End" = "gray30"),
+      name = "Time point"
+    ) +
+    
+    scale_color_manual(
+      values = c("A" = "red", "B" = "orange", "C" = "blue"),
+      guide = "none"
+    ) +
+    
+    labs(
+      title = "Shannon Diversity Change",
+      x = "Cluster",
+      y = "Shannon diversity"
+    ) +
+    
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5)
+    )
+  
+  p
+
+###### OGU differential abundance analysis
+### Maaslin2 differential abundance tests at baseline
+fit_data_genomes_clusters = Maaslin2(input_data     = "genomes_before.tsv", 
+                                  input_metadata = "Ciclistas_microbiota_all_metadata.tsv", 
+                                  min_prevalence = 0,
+                                  normalization  = "TSS",
+                                  output         = "Maaslin2_genomes_cluster", 
+                                  fixed_effects  = c("cluster"),
+                                  reference      = c("cluster","one"),
+                                  max_significance = 0.05,
+                                  min_abundance  = 100)
+
+### make heatmap and venn diagram of differentially abundant ogu
+# =========================
+  # Load libraries
+  # =========================
+  library(tidyverse)
+  library(pheatmap)
+  
+  # =========================
+  # 1. Read files
+  # =========================
+  comparisons <- read_tsv("ogu_all_comparisons.tsv")
+  abundance <- read_tsv("genomes_relative_before.tsv")
+  metadata <- read_tsv("ciclistas_microbiota_all_metadata.tsv")
+  
+  # =========================
+  # 2. Identify cluster-defining species
+  # =========================
+  species_AB <- comparisons %>% filter(Comparison == "A vs B") %>% pull(OGU) %>% unique()
+  species_AC <- comparisons %>% filter(Comparison == "A vs C") %>% pull(OGU) %>% unique()
+  species_BC <- comparisons %>% filter(Comparison == "B vs C") %>% pull(OGU) %>% unique()
+  
+  species_A <- intersect(species_AB, species_AC)
+  species_B <- intersect(species_AB, species_BC)
+  species_C <- intersect(species_AC, species_BC)
+  
+  species_overlap <- unique(c(species_A, species_B, species_C))
+  
+  # =========================
+  # Venn diagram of differential-abundance sets
+  # =========================
+  library(ggVennDiagram)
+  
+  venn_sets <- list(
+    AB = species_AB,
+    AC = species_AC,
+    BC = species_BC
+  )
+  
+  ggVennDiagram(
+    venn_sets,
+    label_alpha = 0,
+    label = "count"
+  ) +
+    scale_fill_gradient(low = "white", high = "steelblue") +
+    labs(
+      title = "Differentially abundant species across pairwise comparisons"
+    ) +
+    theme(
+      plot.title = element_text(hjust = 0.5)
+    )
+  
+  # =========================
+  # 3. Subset abundance table
+  # =========================
+  abundance_sub <- abundance %>%
+    filter(feature %in% species_overlap)
+  
+  abundance_mat <- abundance_sub %>%
+    column_to_rownames("feature") %>%
+    as.matrix()
+  
+  # =========================
+  # 4. Log2 transform (add pseudocount)
+  # =========================
+  pseudocount <- 1e-6
+  log_mat <- log2(abundance_mat + pseudocount)
+  
+  # =========================
+  # 5. Z-score per species (row-wise)
+  # =========================
+  z_mat <- t(scale(t(log_mat)))
+  
+  # =========================
+  # 6. Align metadata
+  # =========================
+  metadata <- metadata %>%
+    filter(sample_name %in% colnames(z_mat))
+  
+  metadata <- metadata[match(colnames(z_mat), metadata$sample_name), ]
+  
+  # =========================
+  # 7. Mean z-score per cluster
+  # =========================
+  cluster_levels <- sort(unique(metadata$cluster))
+  
+  cluster_means <- sapply(cluster_levels, function(cl) {
+    rowMeans(z_mat[, metadata$cluster == cl, drop = FALSE])
+  })
+  
+  cluster_means <- as.matrix(cluster_means)
+  
+  # =========================
+  # 8. Optional: order rows by defining cluster
+  # =========================
+  defining_cluster <- case_when(
+    rownames(cluster_means) %in% species_A ~ "A",
+    rownames(cluster_means) %in% species_B ~ "B",
+    rownames(cluster_means) %in% species_C ~ "C"
+  )
+  
+  row_annotation <- data.frame(Cluster = defining_cluster)
+  rownames(row_annotation) <- rownames(cluster_means)
+  
+  # =========================
+  # 9. Plot heatmap
+  # =========================
+  cluster_means <- cluster_means[order(defining_cluster), ]
+  row_annotation <- row_annotation[order(defining_cluster), , drop=FALSE]
+  
+  pheatmap(
+    cluster_means,
+    scale = "none",
+    cluster_rows = TRUE,
+    cluster_cols = FALSE,
+    color = colorRampPalette(c("blue", "white", "red"))(100),
+    main = "Cluster-defining species\nMean log2-relative abundance (z-scored)"
+  )
+
+
+### OGU longitudinal analysis
+library(tidyverse)
+  library(lme4)
+  library(lmerTest)
+  library(emmeans)
+  library(pheatmap)
+  
+  # ----------------------------
+  # 1. Load data
+  # ----------------------------
+  genomes <- read.delim("genome.tsv", check.names = FALSE)
+  metadata <- read.delim("ciclistas_microbiota_all_metadata.tsv", check.names = FALSE)
+  
+  # ----------------------------
+  # 2. Filter genomes
+  # ----------------------------
+  
+  # Keep genomes with >=100 counts in >=4 samples
+  genome_filtered <- genomes %>%
+    rowwise() %>%
+    filter(sum(c_across(-OTU_ID) >= 100) >= 4) %>%
+    ungroup()
+  
+  # ----------------------------
+  # 3. Normalize and log2 transform
+  # ----------------------------
+  
+  genome_mat <- genome_filtered %>%
+    column_to_rownames("OTU_ID") %>%
+    as.matrix()
+  
+  # Relative abundance per sample
+  genome_mat <- sweep(genome_mat, 2, colSums(genome_mat), FUN = "/")
+  
+  # Log2 transform with pseudocount
+  genome_mat <- log2(genome_mat + 1e-6)
+  
+  # Transpose so rows = samples, columns = genomes
+  genome_mat_t <- t(genome_mat)
+  
+  # ----------------------------
+  # 4. Prepare metadata
+  # ----------------------------
+  analysis_df <- metadata %>%
+    dplyr::select(sample_name, cluster, time_point, host_subject_id) %>%
+    filter(sample_name %in% rownames(genome_mat_t)) %>%
+    mutate(
+      cluster = factor(cluster),
+      time_point = factor(time_point),
+      host_subject_id = factor(host_subject_id)
+    )
+  
+  # Ensure row order matches matrix
+  genome_mat_t <- genome_mat_t[analysis_df$sample_name, ]
+  
+  # ----------------------------
+  # 5. Mixed model per genome
+  # ----------------------------
+  results_list <- list()
+  delta_list <- list()
+  
+  for (i in 1:ncol(genome_mat_t)) {
+    
+    df <- data.frame(
+      abundance = genome_mat_t[, i],
+      analysis_df
+    )
+    
+    fit <- try(lmer(abundance ~ time_point * cluster + 
+                      (1 | host_subject_id), data = df),
+               silent = TRUE)
+    if (class(fit)[1] == "try-error") next
+    
+    anova_res <- anova(fit)
+    
+    global_p <- anova_res["time_point", "Pr(>F)"]
+    interaction_p <- anova_res["time_point:cluster", "Pr(>F)"]
+    
+    # Within-cluster contrasts
+    em <- emmeans(fit, ~ time_point | cluster)
+    contr <- as.data.frame(contr <- as.data.frame(
+      contrast(em, method = list("T2_minus_T1" = c(-1, 1)))
+    ))
+    
+    for (j in 1:nrow(contr)) {
+      delta_list[[length(delta_list) + 1]] <- data.frame(
+        Genome = colnames(genome_mat_t)[i],
+        Cluster = contr$cluster[j],
+        Delta_log2_T2_vs_T1 = contr$estimate[j],
+        pvalue = contr$p.value[j]
+      )
+    }
+    
+    results_list[[i]] <- data.frame(
+      Genome = colnames(genome_mat_t)[i],
+      Global_time_p = global_p,
+      Interaction_p = interaction_p
+    )
+  }
+  
+  summary_df <- bind_rows(results_list)
+  delta_df <- bind_rows(delta_list)
+  
+  # ----------------------------
+  # 6. FDR correction
+  # ----------------------------
+  summary_df$Global_FDR <- p.adjust(summary_df$Global_time_p, method = "fdr")
+  summary_df$Interaction_FDR <- p.adjust(summary_df$Interaction_p, method = "fdr")
+  
+  delta_df <- delta_df %>%
+    group_by(Cluster) %>%
+    mutate(FDR = p.adjust(pvalue, method = "fdr")) %>%
+    ungroup()
+  
+  delta_df <- delta_df %>%
+    left_join(summary_df, by = "Genome")
+  
+  write.table(delta_df,
+              "genome_longitudinal_interaction_results.tsv",
+              sep = "\t",
+              quote = FALSE,
+              row.names = FALSE)
+  
+  # ----------------------------
+  # 7. Select significant genomes and build heatmap
+  # ----------------------------
+  # Identify genomes with global, interaction, or cluster-specific significance
+  delta_df <- delta_df %>%
+    group_by(Cluster) %>%
+    mutate(Cluster_FDR = p.adjust(pvalue, method = "fdr")) %>%
+    ungroup()
+  
+  sig_cluster <- delta_df %>%
+    filter(Cluster_FDR < 0.05) %>%
+    pull(Genome) %>%
+    unique()
+  
+  sig_global <- summary_df$Genome[summary_df$Global_FDR < 0.05]
+  sig_interaction <- summary_df$Genome[summary_df$Interaction_FDR < 0.05]
+  
+  sig_genomes <- unique(c(sig_global, sig_interaction, sig_cluster))
+  
+  if (length(sig_genomes) == 0) {
+    message("No significant genomes detected.")
+  } else {
+    
+    # Delta matrix for heatmap
+    heatmap_df <- delta_df %>%
+      filter(Genome %in% sig_genomes) %>%
+      dplyr::select(Genome, Cluster, Delta_log2_T2_vs_T1) %>%
+      pivot_wider(names_from = Cluster, values_from = Delta_log2_T2_vs_T1)
+    
+    genome_names <- heatmap_df$Genome
+    heatmap_df$Genome <- NULL
+    heatmap_df[] <- lapply(heatmap_df, function(x) as.numeric(as.character(x)))
+    heatmap_mat <- as.matrix(heatmap_df)
+    rownames(heatmap_mat) <- genome_names
+    heatmap_mat <- heatmap_mat[rowSums(is.na(heatmap_mat)) != ncol(heatmap_mat), ]
+    
+    # Row annotation (TRUE/FALSE only)
+    annotation_row <- summary_df %>%
+      filter(Genome %in% sig_genomes) %>%
+      mutate(
+        Global_change = Global_FDR < 0.05,
+        Interaction = Interaction_FDR < 0.05,
+        Cluster_specific = Genome %in% sig_cluster
+      ) %>%
+      dplyr::select(Genome, Global_change, Interaction, Cluster_specific)
+    
+    rownames(annotation_row) <- annotation_row$Genome
+    annotation_row$Genome <- NULL
+    annotation_row <- annotation_row[rownames(heatmap_mat), ]
+    annotation_row[] <- lapply(annotation_row, function(x) factor(x, levels = c(TRUE, FALSE)))
+    
+    # ----------------------------
+    # 7b. Keep only top 50 most significant genomes for heatmap
+    # ----------------------------
+    
+    # Compute minimum FDR across all tests for each genome
+    genome_fdr <- summary_df %>%
+      mutate(Min_FDR = pmin(Global_FDR, Interaction_FDR, na.rm = TRUE)) %>%
+      dplyr::select(Genome, Min_FDR)
+    
+    # For cluster-specific FDRs
+    cluster_min_fdr <- delta_df %>%
+      group_by(Genome) %>%
+      summarize(Cluster_min_FDR = min(Cluster_FDR, na.rm = TRUE), .groups = "drop")
+    
+    # Combine all
+    genome_fdr <- genome_fdr %>%
+      left_join(cluster_min_fdr, by = "Genome") %>%
+      mutate(Overall_Min_FDR = pmin(Min_FDR, Cluster_min_FDR, na.rm = TRUE))
+    
+    # Keep top 50
+    top50_genomes <- genome_fdr %>%
+      arrange(Overall_Min_FDR) %>%
+      slice_head(n = 50) %>%
+      pull(Genome)
+    
+    # Filter heatmap matrix
+    heatmap_mat <- heatmap_mat[rownames(heatmap_mat) %in% top50_genomes, ]
+    annotation_row <- annotation_row[rownames(heatmap_mat), ]
+    
+    
+    # Plot heatmap
+    pheatmap(
+      heatmap_mat,
+      cluster_rows = TRUE,
+      cluster_cols = FALSE,
+      color = colorRampPalette(c("blue", "white", "red"))(100),
+      annotation_row = annotation_row,
+      main = "Log2 Change (T2 - T1) per Cluster"
+    )
+  }
+                               
+### General script for abundance per group box plots
+# ========================
+# Feature abundance plot pipeline
+# ========================
+
+# ------------------------
+# User inputs
+# ------------------------
+abundance_file <- "metabolomics_before_normal_renamed_wide.tsv"   # feature abundance table (samples in rows, features in columns)
+metadata_file  <- "ciclistas_microbiota_all_metadata.tsv"  # metadata table (columns: sample_name, Group)
+feature_to_plot <- "X3.Hydroxybutyric.acid..2TMS.derivative"
+group_order <- c("one", "two", "three")  # desired x-axis order
+
+# ------------------------
+# Load libraries
+# ------------------------
+library(ggplot2)
+library(dplyr)
+
+# ------------------------
+# Load data
+# ------------------------
+abundance <- read.delim(abundance_file, header = TRUE, stringsAsFactors = FALSE, check.names = FALSE)
+colnames(abundance)[1] <- "sample_name"
+# Remove leading "X" added to numeric-like sample names
+abundance$sample_name <- gsub("^X", "", abundance$sample_name)
+
+metadata <- read.delim(metadata_file, header = TRUE, stringsAsFactors = FALSE)
+
+# Merge abundance + metadata
+merged <- abundance %>%
+  select(sample_name, all_of(feature_to_plot)) %>%
+  left_join(metadata, by = "sample_name")
+
+# Set custom group order
+merged$cluster <- factor(merged$cluster, levels = group_order)
+
+# ------------------------
+# Numerical summary (optional)
+# ------------------------
+summary_df <- merged %>%
+  group_by(cluster) %>%
+  summarise(
+    mean_abundance   = mean(.data[[feature_to_plot]], na.rm = TRUE),
+    median_abundance = median(.data[[feature_to_plot]], na.rm = TRUE),
+    sd_abundance     = sd(.data[[feature_to_plot]], na.rm = TRUE),
+    n                = n(),
+    .groups = "drop"
+  )
+
+print(summary_df)
+
+# ------------------------
+# Plotting
+# ------------------------
+# Only show boxplots/violins for groups with variation
+groups_with_variation <- merged %>%
+  group_by(cluster) %>%
+  filter(sd(.data[[feature_to_plot]], na.rm = TRUE) > 0) %>%
+  pull(cluster) %>%
+  unique()
+
+p <- ggplot(merged, aes(x = cluster, y = .data[[feature_to_plot]], fill = cluster)) +
+  geom_boxplot(width = 0.3, outlier.shape = NA, alpha = 0.7) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.8) +
+  scale_y_continuous(trans = "log10") +   # <-- log10 transformation
+  labs(
+    title = paste("Abundance of", feature_to_plot),
+    x = "cluster",
+    y = "Normalized Intensity"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
+
+# Show plot
+print(p)
+                               
+
+
+
+###### Gene set enrichment analysis
+### Differential genes
+fit_data_ko_three = Maaslin2(input_data     = "ko_before.tsv", 
+                           input_metadata = "Ciclistas_microbiota_all_metadata.tsv", 
+                           min_prevalence = 0.1,
+                           normalization  = "tss",
+                           output         = "Maaslin2_ko_three", 
+                           fixed_effects  = c("cluster"),
+                           reference      = c("cluster","three"),
+                           max_significance = 0.05,
+                           min_abundance  = 0)
+                               
+### Gene abundance change
+fit_data_ko_change_three = Maaslin2(input_data     = "ko.tsv", 
+                                                       input_metadata = "Ciclistas_microbiota_all_metadata.tsv", 
+                                                       min_prevalence = 0.1,
+                                                       normalization  = "none",
+                                                       output         = "Maaslin2_ko_change_three", 
+                                                       fixed_effects  = c("time_point"),
+                                                       random_effects = c("host_subject_id"),
+                                                       max_significance = 0.05)
+
+                               
+### GSEA using KEGG pathways                               
+library(data.table)
+library(dplyr)
+library(stringr)
+library(httr)
+library(fgsea)
+library(ggplot2)
+library(ggrepel)
+
+# ---- 1. Define input files and parameters ----
+ko_file <- "ko_BvsC_all.csv"               # Ranked KOs: feature, coef
+map_module  <- "module-to-ko.map"          # KEGG module map
+map_pathway <- "pathway-to-ko.map"         # KEGG pathway map
+output_prefix <- "gsea_kegg_BvsC_2"
+
+padj_cutoff <- 0.05   # adjusted p-value threshold
+
+# ---- 2. Load ranked KO table ----
+ko_table <- fread(ko_file)
+if(!all(c("feature","coef") %in% names(ko_table))) stop("KO CSV must have feature and coef columns")
+ranks <- sort(setNames(ko_table$coef, ko_table$feature), decreasing = TRUE)
+cat("Loaded", length(ranks), "KO features.\n")
+
+# ---- 3. Load mapping files ----
+load_kegg_map <- function(file){
+  dt <- as.data.frame(fread(file, header = FALSE, sep = "\t", fill = TRUE, data.table = FALSE))
+  if (ncol(dt) < 2) stop("Mapping file appears to have only one column. Check whitespace format.")
+  
+  sets <- lapply(seq_len(nrow(dt)), function(i) {
+    x <- as.character(na.omit(dt[i, -1]))
+    return(x)
+  })
+  names(sets) <- dt[[1]]
+  return(sets)
+}
+
+module_sets <- load_kegg_map(map_module)
+pathway_sets <- load_kegg_map(map_pathway)
+cat("Modules:", length(module_sets), "Pathways:", length(pathway_sets), "\n")
+
+# ---- 4. Filter sets ----
+filter_sets <- function(sets, ranks){
+  sets_filt <- lapply(sets, function(x) intersect(x, names(ranks)))
+  sets_filt <- sets_filt[sapply(sets_filt,length) >= 5]
+  return(sets_filt)
+}
+
+module_sets_f <- filter_sets(module_sets, ranks)
+pathway_sets_f <- filter_sets(pathway_sets, ranks)
+cat("Filtered sets: Modules=",length(module_sets_f),
+    "Pathways=",length(pathway_sets_f),"\n")
+
+# ---- 5. Run fgseaMultilevel ----
+run_fgsea <- function(sets, ranks){
+  fgseaMultilevel(
+    pathways=sets,
+    stats=ranks,
+    minSize=5,
+    maxSize=500,
+    nproc    = 1
+  ) %>% arrange(padj)
+}
+
+cat("Running GSEA for Modules...\n")
+res_modules <- run_fgsea(module_sets_f, ranks)
+cat("Running GSEA for Pathways...\n")
+res_pathways <- run_fgsea(pathway_sets_f, ranks)
+
+
+# ---- 7. Save results ----
+fwrite(res_modules, paste0(output_prefix,"_modules.csv"))
+fwrite(res_pathways, paste0(output_prefix,"_pathways.csv"))
+cat("✅ Results saved for Modules and Pathways.\n")
+
+# ---- 8. Volcano Plot Function ----
+plot_gsea_volcano <- function(res, name_col, title_prefix, padj_thresh = 0.05, output_prefix = NULL){
+  res <- as.data.frame(res)
+  if (!all(c("NES", "padj") %in% names(res))) 
+    stop("Input result must contain NES and padj columns.")
+  
+  res$label <- if (name_col %in% names(res)) as.character(res[[name_col]]) else as.character(res$pathway)
+  res$label[is.na(res$label) | res$label == ""] <- res$pathway[is.na(res$label) | res$label == ""]
+  
+  res$status <- dplyr::case_when(
+    is.na(res$padj) ~ "ns",
+    res$padj >= padj_thresh ~ "ns",
+    res$NES > 0 ~ "pos",
+    res$NES < 0 ~ "neg",
+    TRUE ~ "ns"
+  )
+  
+  cols <- c("pos" = "#1f77b4", "neg" = "#d62728", "ns" = "grey70")
+  
+  nonzero <- res$padj[res$padj > 0]
+  eps <- if (length(nonzero) > 0) min(nonzero, na.rm = TRUE)/10 else .Machine$double.xmin
+  res$padj_plot <- ifelse(res$padj == 0, eps, res$padj)
+  
+  res$label_plot <- ifelse(res$padj < padj_thresh, res$label, "")
+  
+  title_text <- paste0(output_prefix, " – ", title_prefix, 
+                       " GSEA Volcano Plot (padj <", padj_thresh, ")")
+  
+  p <- ggplot(res, aes(x = NES, y = -log10(padj_plot), color = status, label = label_plot)) +
+    geom_point(size = 3, alpha = 0.8) +
+    scale_color_manual(values = cols, guide = "none") +
+    ggrepel::geom_text_repel(max.overlaps = 15, size = 3, box.padding = 0.4, segment.color = "grey60") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+    geom_hline(yintercept = -log10(padj_thresh), linetype = "dotted", color = "black") +
+    theme_minimal(base_size = 13) +
+    labs(
+      x = "Normalized Enrichment Score (NES)",
+      y = "-log10(adjusted p-value)",
+      title = title_text
+    ) +
+    theme(panel.grid.minor = element_blank())
+  
+  print(p)                               
+                               
+
+
+                               
+###### Flux balance analysis
+
+### baseline differential fluxes
+ fit_data_export_one_correct = Maaslin2(input_data     = "production_per_cyclist_correct.tsv", 
+                               input_metadata = "Ciclistas_microbiota_all_metadata.tsv", 
+                               min_prevalence = 0,
+                               normalization  = "none",
+                               output         = "Maaslin2_export_one_correct", 
+                               fixed_effects  = c("cluster"),
+                               reference      = c("cluster","one"),
+                               max_significance = 0.05,
+                               min_abundance  = 0) 
+
+### Flux changes longitudinally 
+fit_data_export_change_three_genus_complete = Maaslin2(input_data     = "modelo_metabolico_genus_complete_export_three_change.txt", 
+                                              input_metadata = "Ciclistas_microbiota_all_metadata.tsv", 
+                                              min_prevalence = 0.1,
+                                              normalization  = "none",
+                                              output         = "Maaslin2_export_change_three_genus_complete", 
+                                              fixed_effects  = c("time_point"),
+                                              random_effects = c("host_subject_id"),
+                                              max_significance = 0.05)
+
+
+### Differential flux volcano plots
+# ------------------------
+# User Inputs
+# ------------------------
+maaslin_file <- "exports_AvsC_before_correct.tsv"  # path to your MaAsLin2 output
+q_cutoff <- 0.05                        # significance threshold
+
+# ------------------------
+# Load libraries
+# ------------------------
+library(ggplot2)
+library(dplyr)
+library(ggrepel)  # for nice label placement
+
+# ------------------------
+# Load and prepare data
+# ------------------------
+maaslin <- read.delim(maaslin_file, header = TRUE, stringsAsFactors = FALSE)
+
+# Compute -log10(qval) for plotting
+maaslin <- maaslin %>%
+  mutate(
+    logq = -log10(qval),
+    sig = case_when(
+      qval < q_cutoff & coef > 0 ~ "Up",
+      qval < q_cutoff & coef < 0 ~ "Down",
+      TRUE ~ "NS"
+    )
+  )
+
+# ------------------------
+# Plot
+# ------------------------
+p <- ggplot(maaslin, aes(x = coef, y = logq)) +
+  geom_point(aes(color = sig), alpha = 0.8, size = 2) +
+  scale_color_manual(
+    values = c("Up" = "blue", "Down" = "red", "NS" = "gray70")
+  ) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_hline(yintercept = -log10(q_cutoff), linetype = "dashed") +
+  geom_text_repel(
+    data = subset(maaslin, qval < q_cutoff),
+    aes(label = feature),
+    size = 3,
+    max.overlaps = 15,
+    segment.size = 0.3
+  ) +
+  labs(
+    title = "Exports A vs C",
+    x = "Coefficient",
+    y = expression(-log[10](qval)),
+    color = "Direction"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "none",
+    panel.grid.minor = element_blank()
+  )
+
+# Show plot
+print(p)
+
+  
+### Import Export Bar graphs
+# ========================
+# Feature abundance plot pipeline (Export vs Import)
+# ========================
+
+# ------------------------
+# User inputs
+# ------------------------
+export_file <- "production_per_cyclist_correct.tsv"   # export abundance file
+import_file <- "import_per_cyclist.tsv"   # import abundance file
+metadata_file  <- "ciclistas_microbiota_all_metadata.tsv"  # metadata table
+feature_to_plot <- "L-isoleucine"  # feature to visualize
+group_order <- c("one", "two", "three")  # cluster order
+
+# ------------------------
+# Load libraries
+# ------------------------
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(tidyr)
+
+# ------------------------
+# Load data
+# ------------------------
+
+# Read Export and Import (semicolon delimited if CSV)
+export <- read_tsv(export_file)
+import <- read_tsv(import_file)
+metadata <- read_tsv(metadata_file)
+
+# ------------------------
+# Prepare abundance tables
+# ------------------------
+
+# Set sample names as column names, first column = feature
+colnames(export)[1] <- "Feature"
+colnames(import)[1] <- "Feature"
+
+# Filter for desired feature
+export_feature <- export %>% filter(Feature == feature_to_plot) %>% select(-Feature)
+import_feature <- import %>% filter(Feature == feature_to_plot) %>% select(-Feature)
+
+# Transpose to long format
+export_long <- data.frame(
+  sample_name = names(export_feature),
+  abundance = as.numeric(export_feature[1, ]),
+  type = "Export"
+)
+
+import_long <- data.frame(
+  sample_name = names(import_feature),
+  abundance = as.numeric(import_feature[1, ]),
+  type = "Import"
+)
+
+# Combine both
+combined <- bind_rows(export_long, import_long)
+
+# Clean sample names (remove any leading "X" from numeric-like names)
+combined$sample_name <- gsub("^X", "", combined$sample_name)
+
+# Merge with metadata
+merged <- combined %>%
+  left_join(metadata, by = c("sample_name" = names(metadata)[1]))
+
+# Set cluster as factor with defined order
+merged$cluster <- factor(merged$cluster, levels = group_order)
+
+# ------------------------
+# Numerical summary (optional)
+# ------------------------
+summary_df <- merged %>%
+  group_by(cluster, type) %>%
+  summarise(
+    mean_abundance   = mean(abundance, na.rm = TRUE),
+    median_abundance = median(abundance, na.rm = TRUE),
+    sd_abundance     = sd(abundance, na.rm = TRUE),
+    n                = n(),
+    .groups = "drop"
+  )
+
+print(summary_df)
+
+# ------------------------
+# Plotting
+# ------------------------
+p <- ggplot(merged, aes(x = cluster, y = abundance, fill = type)) +
+  geom_boxplot(width = 0.4, position = position_dodge(width = 0.6), outlier.shape = NA, alpha = 0.8) +
+  geom_jitter(aes(color = type), size = 2, alpha = 0.8, position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.6)) +
+  scale_y_continuous(trans = "identity") +###add_log10_for_log_scale_identity_for_linear
+  scale_fill_manual(values = c("Export" = "skyblue", "Import" = "salmon")) +
+  scale_color_manual(values = c("Export" = "skyblue4", "Import" = "darkred")) +
+  labs(
+    title = paste("Import and Export", feature_to_plot),
+    x = "Cluster",
+    y = "mmol/g/h",
+    fill = "Type",
+    color = "Type"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "top",
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+
+# Show plot
+print(p)
+                               
+
+
+
+
+###### Metabolite Differential analysis
+
+### Cluster differences at baseline
+library(tidyverse)
+library(emmeans)
+library(pheatmap)
+
+# ----------------------------
+# 1. Load data
+# ----------------------------
+
+metabolites <- read.delim("metabolites_good.tsv", check.names = FALSE)
+metadata <- read.delim("ciclistas_microbiota_all_metadata.tsv", check.names = FALSE)
+
+# Ensure UTF-8 encoding
+metabolites$Compound <- enc2utf8(metabolites$Compound)
+
+# ----------------------------
+# 2. Filter to time point 1
+# ----------------------------
+
+metadata_tp1 <- metadata %>%
+  filter(time_point == 1)
+
+common_samples <- intersect(metadata_tp1$sample_name, colnames(metabolites))
+
+metadata_tp1 <- metadata_tp1 %>%
+  filter(sample_name %in% common_samples)
+
+metabolites_tp1 <- metabolites %>%
+  dplyr::select(Compound, all_of(metadata_tp1$sample_name))
+
+# ----------------------------
+# 3. Prepare matrix
+# ----------------------------
+
+met_mat <- metabolites_tp1 %>%
+  column_to_rownames("Compound") %>%
+  as.matrix()
+
+# log2 transform
+met_mat <- log2(met_mat + 1e-6)
+
+# transpose so rows = samples
+met_mat_t <- t(met_mat)
+
+analysis_df <- metadata_tp1 %>%
+  dplyr::select(sample_name, cluster)
+
+analysis_df$cluster <- factor(analysis_df$cluster, levels = c("A","B","C"))
+
+# ----------------------------
+# 4. Linear modeling safely
+# ----------------------------
+
+results_list <- list()
+
+for (i in 1:ncol(met_mat_t)) {
+  
+  y <- met_mat_t[, i]
+  
+  df <- data.frame(
+    abundance = y,
+    cluster = analysis_df$cluster
+  )
+  
+  fit <- lm(abundance ~ cluster, data = df)
+  
+  em <- emmeans(fit, ~ cluster)
+  contrast_df <- as.data.frame(pairs(em))
+  
+  for (j in 1:nrow(contrast_df)) {
+    results_list[[length(results_list) + 1]] <- data.frame(
+      Metabolite = colnames(met_mat_t)[i],
+      Comparison = contrast_df$contrast[j],
+      log2FoldDifference = contrast_df$estimate[j],
+      StdError = contrast_df$SE[j],
+      pvalue = contrast_df$p.value[j]
+    )
+  }
+}
+
+results_df <- bind_rows(results_list)
+
+# ----------------------------
+# 5. FDR correction
+# ----------------------------
+
+results_df <- results_df %>%
+  group_by(Comparison) %>%
+  mutate(FDR = p.adjust(pvalue, method = "fdr")) %>%
+  ungroup()
+
+sig_results <- results_df %>%
+  filter(FDR < 0.05)
+
+write.table(sig_results,
+            "significant_metabolites_before.tsv",
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE)                               
+                               
+####  Longitudinal analysis
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(pheatmap)
+
+# ----------------------------
+# 1. Load data
+# ----------------------------
+
+metabolites <- read.delim("metabolites_good.tsv", check.names = FALSE)
+metadata <- read.delim("ciclistas_microbiota_all_metadata.tsv", check.names = FALSE)
+
+common_samples <- intersect(metadata$sample_name, colnames(metabolites))
+metadata <- metadata %>% filter(sample_name %in% common_samples)
+metabolites <- metabolites %>% dplyr::select(Compound, all_of(common_samples))
+
+# ----------------------------
+# 2. Prepare matrix
+# ----------------------------
+
+met_mat <- metabolites %>%
+  column_to_rownames("Compound") %>%
+  as.matrix()
+
+met_mat <- log2(met_mat + 1e-6)
+met_mat_t <- t(met_mat)
+
+analysis_df <- metadata %>%
+  dplyr::select(sample_name, cluster, time_point, host_subject_id) %>%
+  mutate(
+    cluster = factor(cluster),
+    time_point = factor(time_point),
+    host_subject_id = factor(host_subject_id)
+  )
+
+# ----------------------------
+# 3. Mixed model per metabolite
+# ----------------------------
+
+results_list <- list()
+delta_list <- list()
+
+for (i in 1:ncol(met_mat_t)) {
+  
+  df <- data.frame(
+    abundance = met_mat_t[, i],
+    analysis_df
+  )
+  
+  fit <- try(lmer(abundance ~ time_point * cluster + 
+                    (1 | host_subject_id), data = df),
+             silent = TRUE)
+  if (class(fit)[1] == "try-error") next
+  
+  anova_res <- anova(fit)
+  
+  global_p <- anova_res["time_point", "Pr(>F)"]
+  interaction_p <- anova_res["time_point:cluster", "Pr(>F)"]
+  
+  # Within-cluster contrasts
+  em <- emmeans(fit, ~ time_point | cluster)
+  contr <- as.data.frame(pairs(em))
+  
+  for (j in 1:nrow(contr)) {
+    delta_list[[length(delta_list) + 1]] <- data.frame(
+      Metabolite = colnames(met_mat_t)[i],
+      Cluster = contr$cluster[j],
+      Delta_log2_T2_vs_T1 = contr$estimate[j],
+      pvalue = contr$p.value[j]
+    )
+  }
+  
+  results_list[[i]] <- data.frame(
+    Metabolite = colnames(met_mat_t)[i],
+    Global_time_p = global_p,
+    Interaction_p = interaction_p
+  )
+}
+
+summary_df <- bind_rows(results_list)
+delta_df <- bind_rows(delta_list)
+
+# ----------------------------
+# 4. FDR correction
+# ----------------------------
+
+summary_df$Global_FDR <- p.adjust(summary_df$Global_time_p, method = "fdr")
+summary_df$Interaction_FDR <- p.adjust(summary_df$Interaction_p, method = "fdr")
+
+delta_df <- delta_df %>%
+  group_by(Cluster) %>%
+  mutate(FDR = p.adjust(pvalue, method = "fdr")) %>%
+  ungroup()
+
+# Merge global + interaction info
+delta_df <- delta_df %>%
+  left_join(summary_df, by = "Metabolite")
+
+write.table(delta_df,
+            "global_longitudinal_interaction_results_good.tsv",
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE)
+
+# ----------------------------
+# 5. Select significant metabolites and build heatmap
+# ----------------------------
+
+# Step 5a: Identify metabolites to include
+sig_global <- summary_df$Metabolite[summary_df$Global_FDR < 0.05]
+
+sig_cluster <- delta_df %>%
+  group_by(Metabolite) %>%
+  filter(any(FDR < 0.05)) %>%
+  pull(Metabolite) %>%
+  unique()
+
+sig_interaction <- summary_df$Metabolite[summary_df$Interaction_FDR < 0.05]
+
+sig_mets <- unique(c(sig_global, sig_cluster, sig_interaction))
+
+if (length(sig_mets) == 0) {
+  message("No significant metabolites detected.")
+} else {
+  
+  # Step 5b: Build delta matrix (T2 - T1)
+  heatmap_df <- delta_df %>%
+    filter(Metabolite %in% sig_mets) %>%
+    dplyr::select(Metabolite, Cluster, Delta_log2_T2_vs_T1) %>%
+    pivot_wider(names_from = Cluster,
+                values_from = Delta_log2_T2_vs_T1)
+  
+  # Convert to numeric matrix
+  met_names <- heatmap_df$Metabolite
+  heatmap_df$Metabolite <- NULL
+  heatmap_df[] <- lapply(heatmap_df, function(x) as.numeric(as.character(x)))
+  heatmap_mat <- as.matrix(heatmap_df)
+  rownames(heatmap_mat) <- met_names
+  heatmap_mat <- heatmap_mat[rowSums(is.na(heatmap_mat)) != ncol(heatmap_mat), ]
+  
+  # Step 5c: Row annotation
+  annotation_row <- summary_df %>%
+    filter(Metabolite %in% sig_mets) %>%
+    dplyr::select(Metabolite, Global_FDR, Interaction_FDR) %>%
+    mutate(
+      Global_change = factor(Global_FDR < 0.05, levels = c(TRUE, FALSE)),
+      Interaction = factor(Interaction_FDR < 0.05, levels = c(TRUE, FALSE)),
+      Cluster_specific = factor(Metabolite %in% sig_cluster, levels = c(TRUE, FALSE))
+    )
+  
+  rownames(annotation_row) <- annotation_row$Metabolite
+  annotation_row$Metabolite <- NULL
+  
+  # Align annotation rows
+  annotation_row <- annotation_row[rownames(heatmap_mat), ]
+  
+  # ----------------------------
+  # 5. Select significant metabolites and build heatmap
+  # ----------------------------
+  
+  # Step 1: Identify significant metabolites
+  
+  # Make sure cluster-specific FDR is calculated
+  delta_df <- delta_df %>%
+    group_by(Cluster) %>%
+    mutate(Cluster_FDR = p.adjust(pvalue, method = "fdr")) %>%
+    ungroup()
+  
+  # Metabolites with any cluster-specific significant change
+  sig_cluster <- delta_df %>%
+    filter(Cluster_FDR < 0.05) %>%
+    pull(Metabolite) %>%
+    unique()
+  
+  # Metabolites with global or interaction significance
+  sig_global <- summary_df$Metabolite[summary_df$Global_FDR < 0.05]
+  sig_interaction <- summary_df$Metabolite[summary_df$Interaction_FDR < 0.05]
+  
+  # Combine all metabolites
+  sig_mets <- unique(c(sig_global, sig_interaction, sig_cluster))
+  
+  if (length(sig_mets) == 0) {
+    message("No significant metabolites detected.")
+  } else {
+    
+    # Step 2: Build delta matrix
+    heatmap_df <- delta_df %>%
+      filter(Metabolite %in% sig_mets) %>%
+      dplyr::select(Metabolite, Cluster, Delta_log2_T2_vs_T1) %>%
+      pivot_wider(names_from = Cluster, values_from = Delta_log2_T2_vs_T1)
+    
+    met_names <- heatmap_df$Metabolite
+    heatmap_df$Metabolite <- NULL
+    heatmap_df[] <- lapply(heatmap_df, function(x) as.numeric(as.character(x)))
+    heatmap_mat <- as.matrix(heatmap_df)
+    rownames(heatmap_mat) <- met_names
+    heatmap_mat <- heatmap_mat[rowSums(is.na(heatmap_mat)) != ncol(heatmap_mat), ]
+    
+    # Step 3: Row annotation with TRUE/FALSE only
+    annotation_row <- summary_df %>%
+      filter(Metabolite %in% sig_mets) %>%
+      mutate(
+        Global_change = Global_FDR < 0.05,
+        Interaction = Interaction_FDR < 0.05,
+        Cluster_specific = Metabolite %in% sig_cluster
+      ) %>%
+      dplyr::select(Metabolite, Global_change, Interaction, Cluster_specific)
+    
+    rownames(annotation_row) <- annotation_row$Metabolite
+    annotation_row$Metabolite <- NULL
+    annotation_row <- annotation_row[rownames(heatmap_mat), ]
+    
+    # Convert logicals to factors for pheatmap
+    annotation_row[] <- lapply(annotation_row, function(x) factor(x, levels = c(TRUE, FALSE)))
+    
+    # Step 4: Plot heatmap
+    pheatmap(
+      heatmap_mat,
+      cluster_rows = TRUE,
+      cluster_cols = FALSE,
+      color = colorRampPalette(c("blue", "white", "red"))(100),
+      annotation_row = annotation_row,
+      main = "Log2 Change (T2 - T1) per Cluster"
+    )
+  }}        
+
+### sparce Parital least sqaures descriminant analysis on longitudinal metabolomics data
+                               # Load libraries
+  library(mixOmics)
+  library(tidyverse)
+  
+  # Load data
+  data <- read.delim("metabolite_delta_per_subject.tsv", stringsAsFactors = FALSE)
+  
+  # Flip signs
+  data$delta <- -1 * data$delta
+  
+  # Reshape to wide format
+  data_wide <- data %>%
+    dplyr::select(host_subject_id, Compound, delta) %>%
+    pivot_wider(names_from = Compound, values_from = delta)
+  
+  # Get cluster labels
+  cluster_df <- data %>%
+    dplyr::select(host_subject_id, cluster) %>%
+    distinct()
+  
+  # Merge
+  data_final <- data_wide %>%
+    left_join(cluster_df, by = "host_subject_id")
+  
+  # Prepare X and Y
+  X <- data_final %>%
+    dplyr::select(-host_subject_id, -cluster)
+  
+  # Replace NA (simple approach for small data)
+  X[is.na(X)] <- 0
+  
+  Y <- as.factor(data_final$cluster)
+  
+  # -----------------------------
+  # Tune sPLS-DA (small dataset)
+  # -----------------------------
+  
+  set.seed(123)
+  
+  tune <- tune.splsda(
+    X, Y,
+    ncomp = 2,
+    validation = "loo",   # IMPORTANT for small n
+    dist = "max.dist",
+    measure = "BER",
+    test.keepX = c(3, 5, 10)  # small, sensible range
+  )
+  
+  keepX_opt <- tune$choice.keepX
+  
+  # -----------------------------
+  # Fit final model
+  # -----------------------------
+  
+  splsda_model <- splsda(
+    X, Y,
+    ncomp = 2,
+    keepX = keepX_opt
+  )
+  
+  # -----------------------------
+  # Plot results
+  # -----------------------------
+  
+  plotIndiv(
+    splsda_model,
+    comp = c(1, 2),
+    group = Y,
+    ind.names = data_final$host_subject_id,  # actual host IDs
+    ellipse = TRUE,
+    legend = TRUE,
+    title = "sPLS-DA (15 hosts, 31 metabolites)"
+  )
+  
+  
+  # -----------------------------
+  # Performance (LOO)
+  # -----------------------------
+  
+  perf_res <- perf(
+    splsda_model,
+    validation = "loo",
+    dist = "max.dist"
+  )
+  
+  print(perf_res$error.rate)
+  
+  set.seed(123)
+  
+  nperm <- 200
+  perm_errors <- numeric(nperm)
+  
+  for (i in 1:nperm) {
+    Y_perm <- sample(Y)
+    
+    model_perm <- splsda(X, Y_perm, ncomp = 2, keepX = keepX_opt)
+    perf_perm <- perf(model_perm, validation = "loo", dist = "max.dist")
+    
+    perm_errors[i] <- perf_perm$error.rate$BER[2]
+  }
+  
+  real_error <- perf_res$error.rate$BER[2]
+  
+  p_value <- mean(perm_errors <= real_error)
+  
+  print(p_value)
+  
+  vars_comp1 <- selectVar(splsda_model, comp = 1)
+  vars_comp2 <- selectVar(splsda_model, comp = 2)
+  
+  vars_comp1$name
+  vars_comp2$name
+  loadings_comp1 <- vars_comp1$value
+  loadings_comp2 <- vars_comp2$value
+  library(tibble)
+  library(dplyr)
+  library(ggplot2)
+  
+  # Component 1
+  df1 <- tibble(
+    metabolite = as.character(rownames(loadings_comp1)),  # make sure it's character
+    loading = as.numeric(loadings_comp1[,1]),
+    component = "Component 1"
+  )
+  
+  # Component 2
+  df2 <- tibble(
+    metabolite = as.character(rownames(loadings_comp2)),
+    loading = as.numeric(loadings_comp2[,1]),
+    component = "Component 2"
+  )
+  
+  # Combine
+  df_all <- bind_rows(df1, df2)
+  
+  # Plot
+  ggplot(df_all, aes(x = reorder(metabolite, loading), y = loading)) +
+    geom_col() +
+    coord_flip() +
+    facet_wrap(~component, scales = "free") +
+    theme_minimal() +
+    labs(
+      title = "Selected metabolites (sPLS-DA)",
+      x = "",
+      y = "Loading"
+    )
+  
+  comp1 <- loadings[,1]
+  comp1 <- comp1[comp1 != 0]
+  
+  comp1
+  comp2 <- loadings[,2]
+  comp2 <- comp2[comp2 != 0]
+  
+  comp2
+
+
+  ### sPLS-DA for Cluster A vs B and A vs C
+  
+  library(mixOmics)
+  library(tidyverse)
+  library(ggvenn)
+  library(tibble)
+  
+  # ------------------------------
+  # 1. Prepare X and Y
+  # ------------------------------
+  
+  # Assuming data_final (wide format) already exists
+  # X = metabolite delta matrix
+  X <- data_final %>%
+    dplyr::select(-host_subject_id, -cluster)
+  
+  # Replace NA with 0 if any
+  X[is.na(X)] <- 0
+  
+  # ------------------------------
+  # 2. Cluster A vs B
+  # ------------------------------
+  X_AB <- X[data_final$cluster %in% c("A","B"), ]
+  Y_AB <- factor(data_final$cluster[data_final$cluster %in% c("A","B")])
+  
+  set.seed(123)
+  tune_AB <- tune.splsda(
+    X_AB, Y_AB,
+    ncomp = 1,
+    validation = "loo",
+    dist = "max.dist",
+    measure = "BER",
+    test.keepX = c(3,5,7)
+  )
+  keepX_AB <- tune_AB$choice.keepX
+  
+  splsda_AB <- splsda(X_AB, Y_AB, ncomp = 1, keepX = keepX_AB)
+  
+  # Extract selected metabolites and loadings
+  loadings_AB <- splsda_AB$loadings$X
+  df_AB <- as.data.frame(loadings_AB) %>%
+    rownames_to_column("metabolite") %>%
+    filter(loadings_AB[,1] != 0) %>%
+    rename(loading = 2) %>%  # rename the component column to 'loading'
+    mutate(component = "A_vs_B") %>%
+    arrange(desc(abs(loading)))
+  
+  # ------------------------------
+  # 3. Cluster A vs C
+  # ------------------------------
+  X_AC <- X[data_final$cluster %in% c("A","C"), ]
+  Y_AC <- factor(data_final$cluster[data_final$cluster %in% c("A","C")])
+  
+  set.seed(123)
+  tune_AC <- tune.splsda(
+    X_AC, Y_AC,
+    ncomp = 1,
+    validation = "loo",
+    dist = "max.dist",
+    measure = "BER",
+    test.keepX = c(3,5,7)
+  )
+  keepX_AC <- tune_AC$choice.keepX
+  
+  splsda_AC <- splsda(X_AC, Y_AC, ncomp = 1, keepX = keepX_AC)
+  
+  # Extract selected metabolites and loadings
+  loadings_AC <- splsda_AC$loadings$X
+  df_AC <- as.data.frame(loadings_AC) %>%
+    rownames_to_column("metabolite") %>%
+    filter(loadings_AC[,1] != 0) %>%
+    rename(loading = 2) %>%
+    mutate(component = "A_vs_C") %>%
+    arrange(desc(abs(loading)))
+  
+  # ------------------------------
+  # 4. Combine for comparison
+  # ------------------------------
+  df_selected <- bind_rows(df_AB, df_AC)
+  
+  # Identify metabolites selected in both comparisons
+  common_metabolites <- intersect(df_AB$metabolite, df_AC$metabolite)
+  unique_AB <- setdiff(df_AB$metabolite, df_AC$metabolite)
+  unique_AC <- setdiff(df_AC$metabolite, df_AB$metabolite)
+  
+  cat("Metabolites in both comparisons:\n")
+  print(common_metabolites)                             
