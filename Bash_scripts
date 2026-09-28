@@ -1,0 +1,31 @@
+# All analysis was done within the qiime2 version amplicon-2023.9 environment
+
+# Scaling with ranked subsampling (as an alternative to rarefaction)
+qiime srs SRS --i-table qiita_output/genome.qza --p-
+c-min 20379344  --o-normalized-table genomes_srs.qza
+
+# Beta diversity
+qiime diversity beta --i-table genomes_srs.qza --p-metric braycurtis --o-distance-matrix beta_diversity_braycurtis_srs.qza
+
+qiime diversity beta-phylogenetic --i-table genomes_srs.qza --i-phylogeny WOL2/Phylogeny/wol2_tree.qza --p-metric weighted_unifrac --o-distance-matrix beta_diversity_weighted_unifrac_srs.qza
+
+qiime diversity beta --i-table genome.qza --p-metric aitchison --o-distance-matrix beta_diversity_aitchison.qza
+
+# Principle coordinate analysis
+qiime diversity pcoa --i-distance-matrix beta_diversity_braycurtis_srs.qza --o-pcoa bray_curtis_srs_pcoa.qza
+qiime emperor plot --i-bray_curtis_srs_pcoa.qza --m-metadata-file metadata.tsv --o-visualization curtis_srs_pcoa.qzv
+
+# beta group significance
+qiime diversity beta-group-significance --i-distance-matrix beta_diversity_braycurtis_srs_before.qza --m-metadata-file metadata.tsv --m-metadata-column cluster --p-pairwise True --o-visualization beta_group_significance_braycurtis_srs_before.qzv
+
+# Alpha diversity
+qiime diversity alpha --i-table genomes_srs.qza --p-metric shannon --o-alpha-diversity shannon_diversity.qza
+
+# Paired-sample longitudinal beta diversity analysis
+longitudinal pairwise-distances --i-Distance-Matrix beta_diversity_braycurtis_srs.qza --m-metadata metadata.tsv --m-group-column cluster --m-state-column time_point --m-state_1 one --m-state_2 two
+--m-individual-id-column host_subject_id --o-visualization bray_curtis_change_per_cluster.qzv
+
+# Collapsing gene coordinates to shared ontology information
+woltka collapse -i qiita_output/genes.biom -m WOL2/Function/GO/orf-to-uniref.map.xz -o uniref_ids.biom
+
+
