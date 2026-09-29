@@ -1,3 +1,6 @@
+#Human sequence and contaminant removal with Kneaddata
+keaddata --input1 001A.R1.fastq.gz --input-d 001A.R2.fastq.gz --db human_contaminant_database --output sample_5A --sequencer-source none --run-trim-repetitive --run-fastqc-start --run-fastqc-end
+
 # All analysis was done within the qiime2 version amplicon-2023.9 environment
 
 # Scaling with ranked subsampling (as an alternative to rarefaction)
@@ -27,5 +30,16 @@ longitudinal pairwise-distances --i-Distance-Matrix beta_diversity_braycurtis_sr
 
 # Collapsing gene coordinates to shared ontology information
 woltka collapse -i qiita_output/genes.biom -m WOL2/Function/GO/orf-to-uniref.map.xz -o uniref_ids.biom
+
+# MICOM model construction
+qiime micom build --i-abundance genome.qza --i-taxonomy --wol2_taxonomy_correct_names.qza --p-cutoff 0.001 --p-threads 6 --o-community-models metabolic_model.qza --verbose 
+
+# MICOM growth modeling (medium varied between western_diet_gut_agora.qza, vmh_high_fiber_agora.qza, and vmh_high_fat_low_carb_agora.qza)
+qiime micom grow --i-models metabolic_model.qza --i-medium western_diet_gut_agora.qza --p-tradeoff 0.5 --p-threads 6 --o-results growth.qza --verbose
+
+#MICOM export results
+qiime micom exchanges-per-sample --i-results growth.qza --o-visualization exchanges.qzv
+qiime micom exchanges-per-taxon --i-results growth.qza --o-visualization niche.qzv
+
 
 
