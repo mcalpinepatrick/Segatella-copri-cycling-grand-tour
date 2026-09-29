@@ -1,5 +1,5 @@
 #Human sequence and contaminant removal with Kneaddata
-keaddata --input1 001A.R1.fastq.gz --input-d 001A.R2.fastq.gz --db human_contaminant_database --output sample_5A --sequencer-source none --run-trim-repetitive --run-fastqc-start --run-fastqc-end
+kneaddata --input1 001A.R1.fastq.gz --input-d 001A.R2.fastq.gz --db human_contaminant_database --output sample_5A --sequencer-source none --run-trim-repetitive --run-fastqc-start --run-fastqc-end
 
 # All analysis was done within the qiime2 version amplicon-2023.9 environment
 
