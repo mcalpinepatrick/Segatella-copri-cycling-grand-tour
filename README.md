@@ -1,2 +1,2 @@
 # Segatella-copri-cycling-grand-tour
-This is the code repository for the scientific manuscript: Segatella copri complex species abundance in the gut microbiota associates with high sport performance and metabolic adaptation in a cycling Grand Tour 
+This is the code repository for the scientific manuscript: Segatella copri complex species abundance in the gut microbiota is associated with high sport performance and metabolic adaptation in a cycling Grand Tour. All bash scripts for sequence processing and QIIME2 analysis can be found in Bash_scripts. All R code for statistical analysis and figure generation can be found in R_scripts. 
